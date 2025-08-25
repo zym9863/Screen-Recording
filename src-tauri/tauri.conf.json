@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "screen-recording",
+  "productName": "屏幕录制工具",
   "version": "0.1.0",
-  "identifier": "com.tauri-app.screen-recording",
+  "identifier": "com.screen-recorder.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,13 +12,26 @@
   "app": {
     "windows": [
       {
-        "title": "screen-recording",
-        "width": 800,
-        "height": 600
+        "title": "屏幕录制工具",
+        "label": "main",
+        "width": 900,
+        "height": 650,
+        "minWidth": 600,
+        "minHeight": 400,
+        "center": true,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
+        "skipTaskbar": false
       }
     ],
     "security": {
       "csp": null
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true,
+      "menuOnLeftClick": false
     }
   },
   "bundle": {
