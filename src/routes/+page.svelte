@@ -97,16 +97,16 @@
 
     // 窗口关闭事件
     await listen('window:close_requested', async () => {
-      const confirmed = await message('确定要退出录屏工具吗？', {
-        title: '确认退出',
-        okLabel: '退出',
-        cancelLabel: '取消',
-        kind: 'warning'
-      });
-      
-      if (confirmed) {
-        // 通知后端可以退出
+      try {
+        await message('确定要退出录屏工具吗？', {
+          title: '确认退出',
+          okLabel: '退出',
+          kind: 'warning'
+        });
+        // 如果用户点击了确定，关闭窗口
         window.close();
+      } catch {
+        // 用户点击了取消或关闭，不做任何操作
       }
     });
   }
@@ -137,14 +137,15 @@
       }
 
       // 开始录制
-      await screenRecorder.startRecording(currentMode, selectedRegion);
+      await screenRecorder.startRecording(currentMode, selectedRegion || undefined);
       
       // 通知后端更新状态
       await invoke('update_recording_status', { status: 'recording' });
       
     } catch (error) {
       console.error('开始录制失败:', error);
-      await message(`开始录制失败: ${error.message}`, {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      await message(`开始录制失败: ${errorMessage}`, {
         title: '错误',
         kind: 'error'
       });
@@ -181,7 +182,8 @@
       }
     } catch (error) {
       console.error('停止录制失败:', error);
-      await message(`停止录制失败: ${error.message}`, {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      await message(`停止录制失败: ${errorMessage}`, {
         title: '错误',
         kind: 'error'
       });
@@ -295,44 +297,47 @@
     <h3>录制设置</h3>
     
     <div class="setting-group">
-      <label>录制模式</label>
-      <div class="radio-group">
-        <label class="radio-item">
-          <input 
-            type="radio" 
-            value="fullscreen" 
-            bind:group={currentMode}
-            disabled={currentStatus !== 'idle'}
-            onchange={() => updateSettings({ mode: currentMode })}
-          />
-          <span>全屏</span>
-        </label>
-        <label class="radio-item">
-          <input 
-            type="radio" 
-            value="window" 
-            bind:group={currentMode}
-            disabled={currentStatus !== 'idle'}
-            onchange={() => updateSettings({ mode: currentMode })}
-          />
-          <span>窗口</span>
-        </label>
-        <label class="radio-item">
-          <input 
-            type="radio" 
-            value="region" 
-            bind:group={currentMode}
-            disabled={currentStatus !== 'idle'}
-            onchange={() => updateSettings({ mode: currentMode })}
-          />
-          <span>区域</span>
-        </label>
-      </div>
+      <fieldset>
+        <legend>录制模式</legend>
+        <div class="radio-group">
+          <label class="radio-item">
+            <input
+              type="radio"
+              value="fullscreen"
+              bind:group={currentMode}
+              disabled={currentStatus !== 'idle'}
+              onchange={() => updateSettings({ mode: currentMode })}
+            />
+            <span>全屏</span>
+          </label>
+          <label class="radio-item">
+            <input
+              type="radio"
+              value="window"
+              bind:group={currentMode}
+              disabled={currentStatus !== 'idle'}
+              onchange={() => updateSettings({ mode: currentMode })}
+            />
+            <span>窗口</span>
+          </label>
+          <label class="radio-item">
+            <input
+              type="radio"
+              value="region"
+              bind:group={currentMode}
+              disabled={currentStatus !== 'idle'}
+              onchange={() => updateSettings({ mode: currentMode })}
+            />
+            <span>区域</span>
+          </label>
+        </div>
+      </fieldset>
     </div>
 
     <div class="setting-group">
-      <label>音频源</label>
-      <select 
+      <label for="audio-source">音频源</label>
+      <select
+        id="audio-source"
         bind:value={currentAudioSource}
         disabled={currentStatus !== 'idle'}
         onchange={() => updateSettings({ audioSource: currentAudioSource })}
@@ -345,8 +350,9 @@
     </div>
 
     <div class="setting-group">
-      <label>视频质量</label>
-      <select 
+      <label for="video-quality">视频质量</label>
+      <select
+        id="video-quality"
         bind:value={currentQuality}
         disabled={currentStatus !== 'idle'}
         onchange={() => updateSettings({ videoQuality: currentQuality })}
@@ -358,14 +364,15 @@
     </div>
 
     <div class="setting-group">
-      <label>保存位置</label>
+      <label for="save-directory">保存位置</label>
       <div class="path-selector">
-        <input 
-          type="text" 
+        <input
+          id="save-directory"
+          type="text"
           value={currentSaveDir || '默认视频文件夹'}
           readonly
         />
-        <button 
+        <button
           class="btn btn-small"
           onclick={selectSaveDirectory}
           disabled={currentStatus !== 'idle'}

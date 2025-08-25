@@ -106,7 +106,8 @@ export class ScreenRecorder {
       console.log('录制已开始', { mode, region, mimeType });
     } catch (error) {
       console.error('开始录制失败:', error);
-      setError(`开始录制失败: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setError(`开始录制失败: ${errorMessage}`);
       throw error;
     }
   }
@@ -154,7 +155,8 @@ export class ScreenRecorder {
           resolve(outputPath);
         } catch (error) {
           console.error('保存录制失败:', error);
-          setError(`保存录制失败: ${error.message}`);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          setError(`保存录制失败: ${errorMessage}`);
           resolve(null);
         }
       };
@@ -245,7 +247,8 @@ export class ScreenRecorder {
       }
     } catch (error) {
       console.error('音频捕获失败:', error);
-      setError(`音频捕获失败: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setError(`音频捕获失败: ${errorMessage}`);
     }
 
     return null;
