@@ -1,5 +1,7 @@
 # 屏幕录制应用 (Screen Recording App)
 
+[English Version](README-EN.md)
+
 一个现代化的桌面屏幕录制应用，基于 Tauri + SvelteKit + TypeScript 构建。支持多种录制模式、音频录制、高质量视频编码等功能。
 
 ## ✨ 功能特性
