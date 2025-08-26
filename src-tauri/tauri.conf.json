@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "屏幕录制工具",
+  "productName": "screen-recorder",
   "version": "0.1.0",
   "identifier": "com.screen-recorder.app",
   "build": {
