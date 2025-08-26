@@ -1,6 +1,7 @@
 use tauri::{AppHandle, Manager, State, Emitter};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::image::Image;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
@@ -191,6 +192,10 @@ fn restore_main_window(app: &AppHandle) -> Result<(), ()> {
 }
 
 /// 初始化系统托盘
+///
+/// 关键点：
+/// - 显式设置托盘图标，避免在 Windows 上出现空白/丢失图标的情况。
+/// - 首选应用默认图标（来自打包配置），若不可用则回退到 `icons/icon.png`。
 fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let tray_menu = Menu::with_items(
         app,
@@ -205,7 +210,22 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         ],
     )?;
 
-    let _tray = TrayIconBuilder::new()
+    // 计算托盘图标：优先使用应用默认窗口图标；否则回退到打包的 PNG
+    // 注意：PNG 对托盘是兼容的，尺寸会被系统缩放；如需更清晰可准备专用 16/32px 图标
+    let tray_icon: Option<Image> = app
+        .default_window_icon()
+        .cloned()
+        .or_else(|| {
+            // 使用 image crate 解码 PNG 字节为 RGBA8，再构造 Tauri Image
+            let bytes = include_bytes!("../icons/icon.png");
+            let reader = image::io::Reader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
+            let dyn_img = reader.decode().ok()?;
+            let rgba = dyn_img.to_rgba8();
+            let (width, height) = rgba.dimensions();
+            Some(Image::new_owned(rgba.into_raw(), width, height))
+        });
+
+    let builder = TrayIconBuilder::new()
         .menu(&tray_menu)
         .tooltip("屏幕录制工具")
         .on_menu_event(move |app, event| {
@@ -234,8 +254,17 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             if let TrayIconEvent::Click { .. } = event {
                 let _ = restore_main_window(&tray.app_handle());
             }
-        })
-        .build(app)?;
+        });
+
+    // 应用图标（若存在）
+    let builder = if let Some(icon) = tray_icon {
+        builder.icon(icon)
+    } else {
+        warn!("未能加载托盘图标，将使用系统默认图标");
+        builder
+    };
+
+    let _tray = builder.build(app)?;
 
     Ok(())
 }
