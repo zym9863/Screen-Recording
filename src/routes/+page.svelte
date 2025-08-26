@@ -95,19 +95,9 @@
       togglePause();
     });
 
-    // 窗口关闭事件
+    // 窗口关闭事件 - 直接退出应用
     await listen('window:close_requested', async () => {
-      try {
-        await message('确定要退出录屏工具吗？', {
-          title: '确认退出',
-          okLabel: '退出',
-          kind: 'warning'
-        });
-        // 如果用户点击了确定，关闭窗口
-        window.close();
-      } catch {
-        // 用户点击了取消或关闭，不做任何操作
-      }
+      await invoke('exit_app');
     });
   }
 

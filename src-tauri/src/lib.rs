@@ -75,16 +75,24 @@ fn update_recording_status(state: State<AppState>, status: String) -> Result<(),
         "paused" => RecordingStatus::Paused,
         _ => return Err("无效的状态".to_string()),
     };
-    
+
     let mut recording_status = state.recording_status.lock()
         .map_err(|e| e.to_string())?;
     *recording_status = new_status.clone();
-    
+
     let mut is_recording = state.is_recording.lock()
         .map_err(|e| e.to_string())?;
     *is_recording = matches!(new_status, RecordingStatus::Recording | RecordingStatus::Paused);
-    
+
     info!("录制状态更新为: {:?}", new_status);
+    Ok(())
+}
+
+/// 退出应用
+#[tauri::command]
+fn exit_app(app: AppHandle) -> Result<(), String> {
+    info!("收到退出应用的请求");
+    app.exit(0);
     Ok(())
 }
 
@@ -188,7 +196,8 @@ pub fn run() {
             stop_recording,
             pause_recording,
             resume_recording,
-            update_recording_status
+            update_recording_status,
+            exit_app
         ])
         .setup(|app| {
             // 设置托盘
