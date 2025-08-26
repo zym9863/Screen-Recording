@@ -105,10 +105,9 @@ export class ScreenRecorder {
       
       console.log('录制已开始', { mode, region, mimeType });
     } catch (error) {
-      console.error('开始录制失败:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setError(`开始录制失败: ${errorMessage}`);
-      throw error;
+  // 静默处理开始录制失败，不更新 UI 错误提示
+  console.warn('开始录制失败(已静默):', error);
+  throw error;
     }
   }
 

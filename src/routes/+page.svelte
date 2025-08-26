@@ -143,12 +143,8 @@
       await invoke('update_recording_status', { status: 'recording' });
       
     } catch (error) {
-      console.error('开始录制失败:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      await message(`开始录制失败: ${errorMessage}`, {
-        title: '错误',
-        kind: 'error'
-      });
+  // 静默处理开始录制失败，不弹出错误提示
+  console.warn('开始录制失败(已静默):', error);
     } finally {
       isLoading = false;
     }
@@ -181,12 +177,8 @@
         });
       }
     } catch (error) {
-      console.error('停止录制失败:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      await message(`停止录制失败: ${errorMessage}`, {
-        title: '错误',
-        kind: 'error'
-      });
+  // 静默处理停止录制失败，不弹出错误提示
+  console.warn('停止录制失败(已静默):', error);
     } finally {
       isLoading = false;
     }
