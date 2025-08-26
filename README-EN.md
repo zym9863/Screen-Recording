@@ -18,8 +18,9 @@ A modern desktop screen recording application built with Tauri + SvelteKit + Typ
 
 - **High-Quality Encoding**
   - Support for VP8/VP9 video encoding
+  - Support for H.264 video encoding (MP4 format)
   - Configurable frame rate and bitrate
-  - WebM format output
+  - WebM and MP4 format output
 
 - **Real-time Control**
   - Start/Pause/Resume/Stop recording
@@ -37,6 +38,7 @@ A modern desktop screen recording application built with Tauri + SvelteKit + Typ
 
 - Windows 10/11, macOS 10.15+ or Linux
 - Modern browser environment with WebRTC support
+- **MP4 format output**: Requires installing [FFmpeg](https://ffmpeg.org/download.html) and adding it to system PATH
 
 ### Installation Steps
 
@@ -76,7 +78,10 @@ A modern desktop screen recording application built with Tauri + SvelteKit + Typ
    - Microphone only
    - System audio only
    - Microphone + System audio
-4. Click "Start" to begin recording
+4. Select output format:
+   - **WebM**: Native support, no additional software required
+   - **MP4**: Requires FFmpeg, better quality and compatibility
+5. Click "Start" to begin recording
 
 ### Recording Controls
 
@@ -91,7 +96,32 @@ After recording completion, files will be automatically saved to:
 - macOS: `Movies` folder
 - Linux: `Videos` folder
 
-File name format: `ScreenRecording_YYYY-MM-DD_HH-MM-SS.webm`
+Supported output formats:
+- **WebM**: `ScreenRecording_YYYY-MM-DD_HH-MM-SS.webm`
+- **MP4**: `ScreenRecording_YYYY-MM-DD_HH-MM-SS.mp4`
+
+> **Note**: MP4 format conversion requires FFmpeg. If FFmpeg is not installed or conversion fails, the WebM format will be retained.
+
+### FFmpeg Installation Guide
+
+#### Windows
+1. Go to the [FFmpeg official website](https://ffmpeg.org/download.html) to download the Windows version
+2. Extract to any directory (e.g., `C:\ffmpeg`)
+3. Add `C:\ffmpeg\bin` to the system PATH environment variable
+4. Restart the application to use MP4 format
+
+#### macOS
+```bash
+# Install using Homebrew
+brew install ffmpeg
+```
+
+#### Linux (Ubuntu/Debian)
+```bash
+# Install using package manager
+sudo apt update
+sudo apt install ffmpeg
+```
 
 ## 🛠️ Development Notes
 
