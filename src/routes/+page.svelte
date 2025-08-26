@@ -27,6 +27,7 @@
   let currentMode = $state($recordingSettings.mode);
   let currentAudioSource = $state($recordingSettings.audioSource);
   let currentQuality = $state($recordingSettings.videoQuality);
+  let currentFileFormat = $state($recordingSettings.fileFormat);
   let currentSaveDir = $state($recordingSettings.saveDirectory);
   let currentError = $state($recordingState.error);
   
@@ -46,6 +47,7 @@
       currentMode = settings.mode;
       currentAudioSource = settings.audioSource;
       currentQuality = settings.videoQuality;
+      currentFileFormat = settings.fileFormat;
       currentSaveDir = settings.saveDirectory;
     });
 
@@ -362,6 +364,24 @@
     </div>
 
     <div class="setting-group">
+      <label for="file-format">输出格式</label>
+      <select
+        id="file-format"
+        bind:value={currentFileFormat}
+        disabled={currentStatus !== 'idle'}
+        onchange={() => updateSettings({ fileFormat: currentFileFormat })}
+      >
+        <option value="webm">WebM (原生支持)</option>
+        <option value="mp4">MP4 (需要FFmpeg转换)</option>
+      </select>
+      {#if currentFileFormat === 'mp4'}
+        <small class="format-hint">
+          ⚠️ MP4格式需要系统安装FFmpeg。如果转换失败，将保留WebM格式。
+        </small>
+      {/if}
+    </div>
+
+    <div class="setting-group">
       <label for="save-directory">保存位置</label>
       <div class="path-selector">
         <input
@@ -665,6 +685,14 @@
     padding: 1rem;
     color: #c62828;
     margin-top: 1rem;
+  }
+
+  .format-hint {
+    display: block;
+    margin-top: 0.5rem;
+    color: #f57c00;
+    font-size: 0.875rem;
+    line-height: 1.4;
   }
 
   @media (prefers-color-scheme: dark) {

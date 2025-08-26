@@ -47,6 +47,8 @@ export class ScreenRecorder {
       'video/webm;codecs=vp9',
       'video/webm;codecs=vp8',
       'video/webm',
+      'video/mp4;codecs=h264,aac',
+      'video/mp4;codecs=h264',
       'video/mp4'
     ];
 
@@ -80,7 +82,7 @@ export class ScreenRecorder {
       }
 
       // 设置 MediaRecorder
-      const mimeType = this.getPreferredMimeType(settings.videoCodec);
+      const mimeType = this.getPreferredMimeType(settings.videoCodec, settings.fileFormat);
       const options: MediaRecorderOptions = {
         mimeType,
         videoBitsPerSecond: settings.videoBitrate * 1000,
@@ -344,7 +346,26 @@ export class ScreenRecorder {
   /**
    * 获取首选的 MIME 类型
    */
-  private getPreferredMimeType(codec: 'vp8' | 'vp9'): string {
+  private getPreferredMimeType(codec: 'vp8' | 'vp9', format: 'webm' | 'mp4' = 'webm'): string {
+    // 如果指定MP4格式，尝试MP4相关的MIME类型
+    if (format === 'mp4') {
+      const mp4Types = [
+        'video/mp4;codecs=h264,aac',
+        'video/mp4;codecs=h264',
+        'video/mp4'
+      ];
+      
+      for (const type of mp4Types) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          return type;
+        }
+      }
+      
+      // MP4不支持时回退到WebM
+      console.warn('MP4格式不受支持，回退到WebM格式');
+    }
+
+    // WebM格式处理
     const preferred = codec === 'vp9' 
       ? 'video/webm;codecs=vp9,opus'
       : 'video/webm;codecs=vp8,opus';
@@ -403,7 +424,17 @@ export class ScreenRecorder {
       .replace(/[:.]/g, '-')
       .replace('T', '_')
       .slice(0, -5);
-    const fileName = `ScreenRecording_${timestamp}.webm`;
+    
+    // 根据MIME类型确定文件扩展名
+    let extension = 'webm';
+    if (this.mediaRecorder?.mimeType.includes('mp4')) {
+      extension = 'mp4';
+    } else if (settings.fileFormat === 'mp4') {
+      // 如果设置为MP4但实际录制为WebM，需要后续转换
+      extension = 'webm'; // 先保存为webm，后续转换为mp4
+    }
+    
+    const fileName = `ScreenRecording_${timestamp}.${extension}`;
 
     // 确定保存路径
     let saveDir = settings.saveDirectory;
@@ -417,6 +448,7 @@ export class ScreenRecorder {
     const uint8Array = new Uint8Array(arrayBuffer);
 
     // 写入文件（确保目录存在）
+    let savedPath: string;
     try {
       // create dir if missing (recursive)
       try {
@@ -429,7 +461,7 @@ export class ScreenRecorder {
       }
       await writeFile(filePath, uint8Array);
       console.log('录制已保存到:', filePath);
-      return filePath;
+      savedPath = filePath;
     } catch (e: any) {
       // 若权限/范围限制，回退到默认视频目录进行一次性保存，但不修改用户设置
       const errMsg = e?.message || String(e);
@@ -444,10 +476,35 @@ export class ScreenRecorder {
         } catch (_) {}
         await writeFile(fallbackPath, uint8Array);
         console.warn('原保存目录不可用，本次已回退到默认视频目录:', fallbackDir);
-        return fallbackPath;
+        savedPath = fallbackPath;
+      } else {
+        throw e;
       }
-      throw e;
     }
+
+    // 如果需要转换为MP4格式
+    if (settings.fileFormat === 'mp4' && extension === 'webm') {
+      try {
+        console.log('开始转换为MP4格式...');
+        const { invoke } = await import('@tauri-apps/api/core');
+        const mp4Path = savedPath.replace(/\.webm$/, '.mp4');
+        
+        // 调用Tauri后端进行格式转换
+        await invoke('convert_to_mp4', { 
+          inputPath: savedPath, 
+          outputPath: mp4Path 
+        });
+        
+        console.log('MP4转换完成:', mp4Path);
+        return mp4Path;
+      } catch (error) {
+        console.error('MP4转换失败，保留WebM格式:', error);
+        // 转换失败时返回原始WebM文件
+        return savedPath;
+      }
+    }
+    
+    return savedPath;
   }
 
   /**

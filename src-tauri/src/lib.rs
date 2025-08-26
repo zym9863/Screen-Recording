@@ -4,7 +4,9 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use tracing::{info, error};
+use std::process::Command;
+use std::path::Path;
+use tracing::{info, error, warn};
 
 /// 录制状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,6 +96,66 @@ fn exit_app(app: AppHandle) -> Result<(), String> {
     info!("收到退出应用的请求");
     app.exit(0);
     Ok(())
+}
+
+/// 将WebM文件转换为MP4格式
+#[tauri::command]
+async fn convert_to_mp4(input_path: String, output_path: String) -> Result<String, String> {
+    info!("开始转换 {} 到 {}", input_path, output_path);
+    
+    // 检查输入文件是否存在
+    if !Path::new(&input_path).exists() {
+        return Err(format!("输入文件不存在: {}", input_path));
+    }
+
+    // 尝试使用系统的FFmpeg
+    let result = tokio::task::spawn_blocking(move || {
+        // 首先尝试使用ffmpeg命令
+        let output = Command::new("ffmpeg")
+            .args([
+                "-i", &input_path,
+                "-c:v", "libx264",       // H.264视频编码
+                "-c:a", "aac",           // AAC音频编码  
+                "-preset", "fast",       // 编码预设
+                "-crf", "23",           // 质量控制
+                "-movflags", "+faststart", // 优化Web播放
+                "-y",                   // 覆盖输出文件
+                &output_path
+            ])
+            .output();
+
+        match output {
+            Ok(output) if output.status.success() => {
+                info!("FFmpeg转换成功完成");
+                
+                // 转换成功后删除原WebM文件
+                if let Err(e) = std::fs::remove_file(&input_path) {
+                    warn!("删除原WebM文件失败: {}", e);
+                }
+                
+                Ok(output_path.clone())
+            },
+            Ok(output) => {
+                let error_msg = String::from_utf8_lossy(&output.stderr);
+                error!("FFmpeg转换失败: {}", error_msg);
+                Err(format!("FFmpeg转换失败: {}", error_msg))
+            },
+            Err(e) => {
+                error!("无法执行FFmpeg命令: {}", e);
+                // 尝试提供更友好的错误信息
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    Err("FFmpeg未安装或不在系统PATH中。请安装FFmpeg以支持MP4格式转换。".to_string())
+                } else {
+                    Err(format!("FFmpeg执行错误: {}", e))
+                }
+            }
+        }
+    }).await;
+
+    match result {
+        Ok(conversion_result) => conversion_result,
+        Err(e) => Err(format!("异步任务错误: {}", e))
+    }
 }
 
 /// 初始化系统托盘
@@ -197,7 +259,8 @@ pub fn run() {
             pause_recording,
             resume_recording,
             update_recording_status,
-            exit_app
+            exit_app,
+            convert_to_mp4
         ])
         .setup(|app| {
             // 设置托盘
