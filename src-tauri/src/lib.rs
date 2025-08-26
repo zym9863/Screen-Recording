@@ -158,6 +158,38 @@ async fn convert_to_mp4(input_path: String, output_path: String) -> Result<Strin
     }
 }
 
+/// 恢复并激活主窗口
+///
+/// 功能：
+/// - 如果窗口被最小化或不可见，则取消最小化、显示并聚焦。
+/// - 同步调整任务栏显示，避免被隐藏后无法在任务栏找到的情况。
+///
+/// 返回：
+/// - Ok(()) 表示已尝试恢复（不保证每一步都成功，但已忽略非关键错误）。
+fn restore_main_window(app: &AppHandle) -> Result<(), ()> {
+    if let Some(window) = app.get_webview_window("main") {
+        // 尽力确保任务栏可见
+        let _ = window.set_skip_taskbar(false);
+
+        let is_minimized = window.is_minimized().unwrap_or(false);
+        let is_visible = window.is_visible().unwrap_or(false);
+
+        if is_minimized {
+            let _ = window.unminimize();
+        }
+
+        if !is_visible {
+            let _ = window.show();
+        }
+
+        // 再次确保显示后获取焦点
+        let _ = window.set_focus();
+        Ok(())
+    } else {
+        Err(())
+    }
+}
+
 /// 初始化系统托盘
 fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let tray_menu = Menu::with_items(
@@ -185,10 +217,7 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     let _ = app.emit("tray:pause_resume", ());
                 }
                 "show_window" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
+                    let _ = restore_main_window(app);
                 }
                 "open_folder" => {
                     let _ = app.emit("tray:open_folder", ());
@@ -200,15 +229,10 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .on_tray_icon_event(|tray, event| {
+            // 左键点击：统一行为为“恢复并激活主窗口”（不再切换隐藏），
+            // 避免窗口处于最小化时被误判为可见而进一步 hide()
             if let TrayIconEvent::Click { .. } = event {
-                if let Some(app) = tray.app_handle().get_webview_window("main") {
-                    if app.is_visible().unwrap_or(false) {
-                        let _ = app.hide();
-                    } else {
-                        let _ = app.show();
-                        let _ = app.set_focus();
-                    }
-                }
+                let _ = restore_main_window(&tray.app_handle());
             }
         })
         .build(app)?;
@@ -285,6 +309,7 @@ pub fn run() {
                         let is_recording = app_handle.is_recording.lock().unwrap();
                         if *is_recording {
                             // 录制中，隐藏窗口到托盘
+                            let _ = main_window.set_skip_taskbar(true);
                             let _ = main_window.hide();
                             info!("录制中，窗口已最小化到托盘");
                         } else {
