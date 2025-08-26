@@ -60,21 +60,25 @@
     // 初始化存储
     await initializeStore();
     
-    // 校验保存目录权限/存在性，不可用则回退
+    // 仅在未设置时填充默认保存目录；已设置则尝试确保目录存在（失败也不覆盖设置）
     try {
-      let dir = currentSaveDir;
-      if (!dir) {
-        dir = await videoDir();
+      const saved = $recordingSettings.saveDirectory || currentSaveDir;
+      if (!saved) {
+        const def = await videoDir();
+        try { await mkdir(def, { recursive: true }); } catch (_) {}
+        updateSettings({ saveDirectory: def });
+      } else {
+        try {
+          const ok = await exists(saved);
+          if (!ok) {
+            try { await mkdir(saved, { recursive: true }); } catch (_) {}
+          }
+        } catch (e) {
+          console.warn('无法验证/创建保存目录，录制时将尝试保存并必要时回退至视频文件夹:', e);
+        }
       }
-      const ok = await exists(dir);
-      if (!ok) {
-        try { await mkdir(dir, { recursive: true }); } catch (_) {}
-      }
-      updateSettings({ saveDirectory: dir });
-    } catch (_) {
-      const fallback = await videoDir();
-      try { await mkdir(fallback, { recursive: true }); } catch (_) {}
-      updateSettings({ saveDirectory: fallback });
+    } catch (e) {
+      console.warn('初始化保存目录时出现问题:', e);
     }
 
     // 监听后端事件

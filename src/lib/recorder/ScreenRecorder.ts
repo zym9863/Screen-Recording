@@ -431,9 +431,9 @@ export class ScreenRecorder {
       console.log('录制已保存到:', filePath);
       return filePath;
     } catch (e: any) {
-      // 如果因权限/范围问题失败，回退到默认视频目录并更新设置
+      // 若权限/范围限制，回退到默认视频目录进行一次性保存，但不修改用户设置
       const errMsg = e?.message || String(e);
-      if (/forbidden|scope|permission/i.test(errMsg)) {
+      if (/forbidden|scope|permission|denied|not\s*permitted/i.test(errMsg)) {
         const fallbackDir = await videoDir();
         const fallbackPath = await join(fallbackDir, fileName);
         try {
@@ -443,9 +443,7 @@ export class ScreenRecorder {
           }
         } catch (_) {}
         await writeFile(fallbackPath, uint8Array);
-        // 更新设置为可用目录，避免下次重启再次选择
-        updateSettings({ saveDirectory: fallbackDir });
-        console.warn('原保存目录不可用，已回退到默认视频目录:', fallbackDir);
+        console.warn('原保存目录不可用，本次已回退到默认视频目录:', fallbackDir);
         return fallbackPath;
       }
       throw e;
