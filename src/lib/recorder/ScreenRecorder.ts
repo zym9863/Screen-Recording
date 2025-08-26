@@ -1,5 +1,5 @@
-import { writeFile } from '@tauri-apps/plugin-fs';
-import { documentDir, videoDir } from '@tauri-apps/api/path';
+import { writeFile, exists, mkdir } from '@tauri-apps/plugin-fs';
+import { documentDir, videoDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { 
@@ -11,6 +11,7 @@ import {
   stopRecording as stopRecordingStore,
   setError,
   updateDuration,
+  updateSettings,
   type RecordingMode,
   type RecordingRegion,
   type AudioSource
@@ -409,17 +410,46 @@ export class ScreenRecorder {
     if (!saveDir) {
       saveDir = await videoDir();
     }
-    const filePath = `${saveDir}/${fileName}`;
+    const filePath = await join(saveDir, fileName);
 
     // 转换为 ArrayBuffer
     const arrayBuffer = await blob.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
 
-    // 写入文件
-    await writeFile(filePath, uint8Array);
-
-    console.log('录制已保存到:', filePath);
-    return filePath;
+    // 写入文件（确保目录存在）
+    try {
+      // create dir if missing (recursive)
+      try {
+        const dirExists = await exists(saveDir);
+        if (!dirExists) {
+          await mkdir(saveDir, { recursive: true });
+        }
+      } catch (_) {
+        // ignore mkdir errors here; write will still attempt and we may fall back
+      }
+      await writeFile(filePath, uint8Array);
+      console.log('录制已保存到:', filePath);
+      return filePath;
+    } catch (e: any) {
+      // 如果因权限/范围问题失败，回退到默认视频目录并更新设置
+      const errMsg = e?.message || String(e);
+      if (/forbidden|scope|permission/i.test(errMsg)) {
+        const fallbackDir = await videoDir();
+        const fallbackPath = await join(fallbackDir, fileName);
+        try {
+          const existsFallback = await exists(fallbackDir);
+          if (!existsFallback) {
+            await mkdir(fallbackDir, { recursive: true });
+          }
+        } catch (_) {}
+        await writeFile(fallbackPath, uint8Array);
+        // 更新设置为可用目录，避免下次重启再次选择
+        updateSettings({ saveDirectory: fallbackDir });
+        console.warn('原保存目录不可用，已回退到默认视频目录:', fallbackDir);
+        return fallbackPath;
+      }
+      throw e;
+    }
   }
 
   /**

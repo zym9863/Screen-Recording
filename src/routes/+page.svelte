@@ -4,8 +4,9 @@
   import { invoke } from '@tauri-apps/api/core';
   import { message } from '@tauri-apps/plugin-dialog';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { documentDir, videoDir } from '@tauri-apps/api/path';
+  import { documentDir, videoDir, join } from '@tauri-apps/api/path';
   import { screenRecorder } from '$lib/recorder/ScreenRecorder';
+  import { exists, mkdir } from '@tauri-apps/plugin-fs';
   import {
     recordingState,
     recordingSettings,
@@ -59,10 +60,21 @@
     // 初始化存储
     await initializeStore();
     
-    // 设置默认保存目录
-    if (!currentSaveDir) {
-      const defaultDir = await videoDir();
-      updateSettings({ saveDirectory: defaultDir });
+    // 校验保存目录权限/存在性，不可用则回退
+    try {
+      let dir = currentSaveDir;
+      if (!dir) {
+        dir = await videoDir();
+      }
+      const ok = await exists(dir);
+      if (!ok) {
+        try { await mkdir(dir, { recursive: true }); } catch (_) {}
+      }
+      updateSettings({ saveDirectory: dir });
+    } catch (_) {
+      const fallback = await videoDir();
+      try { await mkdir(fallback, { recursive: true }); } catch (_) {}
+      updateSettings({ saveDirectory: fallback });
     }
 
     // 监听后端事件
