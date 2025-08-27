@@ -255,20 +255,22 @@
       {#if currentStatus === 'idle'}
         <button 
           class="btn btn-primary btn-large"
+          class:loading={isLoading}
           onclick={startRecording}
           disabled={isLoading}
         >
           <span class="icon icon-record"></span>
-          开始录制
+          {isLoading ? '准备中...' : '开始录制'}
         </button>
       {:else}
         <button 
           class="btn btn-danger btn-large"
+          class:loading={isLoading}
           onclick={stopRecording}
           disabled={isLoading}
         >
           <span class="icon icon-stop"></span>
-          停止录制
+          {isLoading ? '正在停止...' : '停止录制'}
         </button>
         
         {#if currentStatus === 'recording'}
@@ -424,8 +426,22 @@
     padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+    background-size: 400% 400%;
+    animation: gradient-shift 15s ease infinite;
     min-height: 100vh;
     overflow-x: hidden;
+  }
+
+  @keyframes gradient-shift {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
   }
 
   :global(*) {
@@ -623,6 +639,32 @@
     opacity: 0.5;
     cursor: not-allowed;
     transform: none !important;
+  }
+
+  .btn:disabled::before {
+    display: none;
+  }
+
+  .btn.loading {
+    pointer-events: none;
+    position: relative;
+  }
+
+  .btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-left: 8px;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 
   .btn::before {
