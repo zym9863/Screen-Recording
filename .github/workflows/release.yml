@@ -1,0 +1,109 @@
+# GitHub Actions 工作流 - 自动构建和发布 Tauri 应用
+name: 'publish'
+
+# 触发条件：推送标签（如 v1.0.0）或手动触发
+on:
+  push:
+    tags:
+      - 'v*' # 匹配 v1.0.0, v2.1.0 等标签
+  workflow_dispatch: # 允许手动触发
+
+# 定义环境变量
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+
+jobs:
+  publish:
+    # 设置权限
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest' # macOS x86_64
+            args: '--target x86_64-apple-darwin'
+          - platform: 'macos-latest' # macOS Apple Silicon
+            args: '--target aarch64-apple-darwin'
+          - platform: 'ubuntu-22.04' # Linux x86_64
+            args: ''
+          - platform: 'windows-latest' # Windows x86_64
+            args: '--target x86_64-pc-windows-msvc'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      # 检出代码
+      - name: 检出代码仓库
+        uses: actions/checkout@v4
+
+      # 安装 Node.js
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      # 安装 Rust
+      - name: 安装 Rust 稳定版
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # 根据目标平台安装对应的工具链
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      # Linux 依赖安装
+      - name: 安装 Linux 系统依赖
+        if: matrix.platform == 'ubuntu-22.04' # 只在 Ubuntu 上运行
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+
+      # 缓存 Rust 依赖
+      - name: Rust 缓存
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # 安装前端依赖（使用 pnpm）
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: 安装前端依赖
+        run: pnpm install
+
+      # 构建和发布应用
+      - name: 构建 Tauri 应用
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }} # 使用推送的标签名
+          releaseName: 'Screen Recorder v__VERSION__' # __VERSION__ 会被自动替换
+          releaseBody: |
+            屏幕录制工具 v${{ github.ref_name }} 版本发布！
+            
+            ## 新增功能
+            - 高效的屏幕录制功能
+            - 现代化的用户界面
+            - 跨平台支持
+            
+            ## 下载说明
+            - Windows: 下载 `.msi` 或 `.exe` 安装包
+            - macOS: 下载 `.dmg` 安装包
+            - Linux: 下载 `.deb` 或 `.AppImage` 文件
+            
+            请根据您的操作系统选择对应的安装包下载。
+          releaseDraft: false # 设为 true 可创建草稿发布
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          args: ${{ matrix.args }}
+
+      # 上传构建产物（作为工作流制品保留）
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: artifacts-${{ matrix.platform }}
+          path: |
+            src-tauri/target/release/bundle/
+            src-tauri/target/*/release/bundle/
