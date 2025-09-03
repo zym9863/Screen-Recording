@@ -269,20 +269,12 @@
           // TODO: 打开文件
         }
 
-        await message(`视频已保存到: ${outputPath}`, {
-          title: '保存完成',
-          kind: 'info'
-        });
-
         showVideoEditor = false;
         clearRecordedBlob();
       }
     } catch (error) {
-      console.warn('视频保存失败:', error);
-      await message('视频保存失败，请重试', {
-        title: '保存失败',
-        kind: 'error'
-      });
+      // 静默处理保存失败，不显示错误提示框
+      console.warn('视频保存失败(已静默):', error);
     } finally {
       isLoading = false;
     }
@@ -293,10 +285,8 @@
    */
   async function handleVideoError(event: CustomEvent) {
     const { message: errorMessage } = event.detail;
-    await message(`视频处理失败: ${errorMessage}`, {
-      title: '处理失败',
-      kind: 'error'
-    });
+    // 静默处理编辑错误，不显示错误提示框
+    console.warn('视频处理失败(已静默):', errorMessage);
   }
 
   /**
