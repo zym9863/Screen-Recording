@@ -6,7 +6,8 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import { documentDir, videoDir, join } from '@tauri-apps/api/path';
   import { screenRecorder } from '$lib/recorder/ScreenRecorder';
-  import { exists, mkdir } from '@tauri-apps/plugin-fs';
+  import { exists, mkdir, writeFile } from '@tauri-apps/plugin-fs';
+  import VideoEditor from '$lib/components/VideoEditor.svelte';
   import {
     recordingState,
     recordingSettings,
@@ -34,8 +35,9 @@
   let currentError = $state($recordingState.error);
   let currentRecordedBlob = $state($recordingState.recordedBlob);
   let currentRecordedFileName = $state($recordingState.recordedFileName);
-  
+
   let isLoading = $state(false);
+  let showVideoEditor = $state(false);
 
   // 订阅 store 变化
   $effect(() => {
@@ -237,6 +239,135 @@
    */
   function handleCancelDownload() {
     clearRecordedBlob();
+    showVideoEditor = false;
+  }
+
+  /**
+   * 开始视频编辑
+   */
+  function startVideoEdit() {
+    showVideoEditor = true;
+  }
+
+  /**
+   * 处理视频编辑保存
+   */
+  async function handleVideoSave(event: CustomEvent) {
+    try {
+      isLoading = true;
+      const { processedBlob, cropOptions } = event.detail;
+
+      // 使用处理后的视频Blob保存文件
+      const outputPath = await saveProcessedVideo(processedBlob, cropOptions);
+
+      if (outputPath) {
+        // 根据设置执行录制后操作
+        const settings = $recordingSettings;
+        if (settings.afterRecording === 'openFolder') {
+          await openSaveFolder();
+        } else if (settings.afterRecording === 'openFile') {
+          // TODO: 打开文件
+        }
+
+        await message(`视频已保存到: ${outputPath}`, {
+          title: '保存完成',
+          kind: 'info'
+        });
+
+        showVideoEditor = false;
+        clearRecordedBlob();
+      }
+    } catch (error) {
+      console.warn('视频保存失败:', error);
+      await message('视频保存失败，请重试', {
+        title: '保存失败',
+        kind: 'error'
+      });
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  /**
+   * 处理视频编辑错误
+   */
+  async function handleVideoError(event: CustomEvent) {
+    const { message: errorMessage } = event.detail;
+    await message(`视频处理失败: ${errorMessage}`, {
+      title: '处理失败',
+      kind: 'error'
+    });
+  }
+
+  /**
+   * 保存处理后的视频
+   */
+  async function saveProcessedVideo(processedBlob: Blob, cropOptions: any): Promise<string | null> {
+    const settings = $recordingSettings;
+
+    // 确定保存路径
+    let saveDir = settings.saveDirectory;
+    if (!saveDir) {
+      saveDir = await videoDir();
+    }
+
+    // 生成文件名
+    const timestamp = new Date().toISOString()
+      .replace(/[:.]/g, '-')
+      .replace('T', '_')
+      .slice(0, -5);
+
+    const fileName = `ScreenRecording_Edited_${timestamp}.webm`;
+
+    try {
+      // 确保目录存在
+      const dirExists = await exists(saveDir);
+      if (!dirExists) {
+        await mkdir(saveDir, { recursive: true });
+      }
+
+      const filePath = await join(saveDir, fileName);
+
+      // 将Blob转换为Uint8Array
+      const arrayBuffer = await processedBlob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      // 写入文件
+      await writeFile(filePath, uint8Array);
+      console.log('编辑后的视频已保存到:', filePath);
+
+      return filePath;
+    } catch (e: any) {
+      // 若权限/范围限制，回退到默认视频目录
+      const errMsg = e?.message || String(e);
+      if (/forbidden|scope|permission|denied|not\s*permitted/i.test(errMsg)) {
+        const fallbackDir = await videoDir();
+        const fallbackPath = await join(fallbackDir, fileName);
+        try {
+          const existsFallback = await exists(fallbackDir);
+          if (!existsFallback) {
+            await mkdir(fallbackDir, { recursive: true });
+          }
+
+          const arrayBuffer = await processedBlob.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
+          await writeFile(fallbackPath, uint8Array);
+          console.warn('原保存目录不可用，本次已回退到默认视频目录:', fallbackDir);
+          return fallbackPath;
+        } catch (_) {
+          throw e;
+        }
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  /**
+   * 取消视频编辑
+   */
+  function handleVideoCancel() {
+    showVideoEditor = false;
   }
 
   /**
@@ -443,38 +574,57 @@
     </div>
   </div>
 
-  <!-- 手动下载区域 -->
+  <!-- 视频编辑区域 -->
   {#if currentRecordedBlob && !currentAutoDownload}
-    <div class="download-section">
-      <h3>录制完成</h3>
-      <div class="download-info">
-        <div class="file-info">
-          <span class="file-name">{currentRecordedFileName || '未命名录制.webm'}</span>
-          <span class="file-size">
-            {currentRecordedBlob ? `${(currentRecordedBlob.size / 1024 / 1024).toFixed(1)} MB` : ''}
-          </span>
-        </div>
-        <div class="download-actions">
-          <button
-            class="btn btn-primary"
-            class:loading={isLoading}
-            onclick={handleManualDownload}
-            disabled={isLoading}
-          >
-            <span class="icon icon-download"></span>
-            {isLoading ? '下载中...' : '下载文件'}
-          </button>
-          <button
-            class="btn btn-secondary"
-            onclick={handleCancelDownload}
-            disabled={isLoading}
-          >
-            <span class="icon icon-cancel"></span>
-            取消
-          </button>
+    {#if showVideoEditor}
+      <VideoEditor
+        videoBlob={currentRecordedBlob}
+        fileName={currentRecordedFileName || '未命名录制.webm'}
+        {isLoading}
+        on:save={handleVideoSave}
+        on:cancel={handleVideoCancel}
+        on:error={handleVideoError}
+      />
+    {:else}
+      <div class="download-section">
+        <h3>录制完成</h3>
+        <div class="download-info">
+          <div class="file-info">
+            <span class="file-name">{currentRecordedFileName || '未命名录制.webm'}</span>
+            <span class="file-size">
+              {currentRecordedBlob ? `${(currentRecordedBlob.size / 1024 / 1024).toFixed(1)} MB` : ''}
+            </span>
+          </div>
+          <div class="download-actions">
+            <button
+              class="btn btn-primary"
+              onclick={startVideoEdit}
+              disabled={isLoading}
+            >
+              <span class="icon icon-edit"></span>
+              编辑视频
+            </button>
+            <button
+              class="btn btn-secondary"
+              class:loading={isLoading}
+              onclick={handleManualDownload}
+              disabled={isLoading}
+            >
+              <span class="icon icon-download"></span>
+              {isLoading ? '下载中...' : '直接下载'}
+            </button>
+            <button
+              class="btn btn-secondary"
+              onclick={handleCancelDownload}
+              disabled={isLoading}
+            >
+              <span class="icon icon-cancel"></span>
+              取消
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    {/if}
   {/if}
 
   <!-- 快捷键提示 -->
@@ -1066,6 +1216,36 @@
 
   .icon-cancel::after {
     transform: translate(-50%, -50%) rotate(-45deg);
+  }
+
+  .icon-edit {
+    position: relative;
+  }
+
+  .icon-edit::before {
+    content: '';
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    right: 1px;
+    bottom: 1px;
+    border: 2px solid currentColor;
+    border-radius: 3px;
+    background: transparent;
+  }
+
+  .icon-edit::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 6px;
+    height: 6px;
+    border: 2px solid currentColor;
+    border-left: none;
+    border-bottom: none;
+    transform: rotate(45deg);
+    background: transparent;
   }
 
   .radio-group {
