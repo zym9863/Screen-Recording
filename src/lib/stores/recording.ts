@@ -36,6 +36,7 @@ export interface RecordingSettings {
   fileFormat: 'webm' | 'mp4';
   minimizeToTray: boolean;
   afterRecording: 'nothing' | 'openFile' | 'openFolder';
+  autoDownload: boolean; // 是否自动下载录制文件
   shortcuts: {
     toggleRecording: string;
     togglePause: string;
@@ -65,6 +66,8 @@ export interface RecordingState {
   lastOutputPath: string | null;
   error: string | null;
   isMinimized: boolean;
+  recordedBlob: Blob | null; // 待下载的录制数据
+  recordedFileName: string | null; // 建议的文件名
 }
 
 // 默认设置
@@ -80,6 +83,7 @@ const defaultSettings: RecordingSettings = {
   fileFormat: 'webm',
   minimizeToTray: true,
   afterRecording: 'openFolder',
+  autoDownload: true, // 默认自动下载
   shortcuts: {
     toggleRecording: 'Ctrl+Alt+R',
     togglePause: 'Ctrl+Alt+P'
@@ -96,7 +100,9 @@ const defaultState: RecordingState = {
   region: null,
   lastOutputPath: null,
   error: null,
-  isMinimized: false
+  isMinimized: false,
+  recordedBlob: null,
+  recordedFileName: null
 };
 
 // 创建 Stores
@@ -216,10 +222,23 @@ export function resumeRecording() {
 /**
  * 停止录制
  */
-export function stopRecording(outputPath?: string) {
+export function stopRecording(outputPath?: string, recordedBlob?: Blob, fileName?: string) {
   recordingState.update(state => ({
     ...defaultState,
-    lastOutputPath: outputPath || state.lastOutputPath
+    lastOutputPath: outputPath || state.lastOutputPath,
+    recordedBlob: recordedBlob || null,
+    recordedFileName: fileName || null
+  }));
+}
+
+/**
+ * 清除录制数据
+ */
+export function clearRecordedBlob() {
+  recordingState.update(state => ({
+    ...state,
+    recordedBlob: null,
+    recordedFileName: null
   }));
 }
 

@@ -18,7 +18,8 @@
     canStop,
     formatDuration,
     updateSettings,
-    initializeStore
+    initializeStore,
+    clearRecordedBlob
   } from '$lib/stores/recording';
 
   // 响应式状态
@@ -29,7 +30,10 @@
   let currentQuality = $state($recordingSettings.videoQuality);
   let currentFileFormat = $state($recordingSettings.fileFormat);
   let currentSaveDir = $state($recordingSettings.saveDirectory);
+  let currentAutoDownload = $state($recordingSettings.autoDownload);
   let currentError = $state($recordingState.error);
+  let currentRecordedBlob = $state($recordingState.recordedBlob);
+  let currentRecordedFileName = $state($recordingState.recordedFileName);
   
   let isLoading = $state(false);
 
@@ -39,6 +43,8 @@
       currentStatus = state.status;
       currentDuration = state.duration;
       currentError = state.error;
+      currentRecordedBlob = state.recordedBlob;
+      currentRecordedFileName = state.recordedFileName;
     });
 
     const unsubscribeSettings = recordingSettings.subscribe(settings => {
@@ -47,6 +53,7 @@
       currentQuality = settings.videoQuality;
       currentFileFormat = settings.fileFormat;
       currentSaveDir = settings.saveDirectory;
+      currentAutoDownload = settings.autoDownload;
     });
 
     return () => {
@@ -194,6 +201,42 @@
       screenRecorder.resumeRecording();
       invoke('update_recording_status', { status: 'recording' });
     }
+  }
+
+  /**
+   * 手动下载录制文件
+   */
+  async function handleManualDownload() {
+    try {
+      isLoading = true;
+      const outputPath = await screenRecorder.downloadRecording();
+      
+      if (outputPath) {
+        // 根据设置执行录制后操作
+        const settings = $recordingSettings;
+        if (settings.afterRecording === 'openFolder') {
+          await openSaveFolder();
+        } else if (settings.afterRecording === 'openFile') {
+          // TODO: 打开文件
+        }
+        
+        await message(`录制已保存到: ${outputPath}`, {
+          title: '下载完成',
+          kind: 'info'
+        });
+      }
+    } catch (error) {
+      console.warn('手动下载失败:', error);
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  /**
+   * 取消下载（清除待下载数据）
+   */
+  function handleCancelDownload() {
+    clearRecordedBlob();
   }
 
   /**
@@ -383,7 +426,56 @@
         </button>
       </div>
     </div>
+
+    <div class="setting-group">
+      <label class="checkbox-label">
+        <input
+          type="checkbox"
+          bind:checked={currentAutoDownload}
+          disabled={currentStatus !== 'idle'}
+          onchange={() => updateSettings({ autoDownload: currentAutoDownload })}
+        />
+        <span class="checkbox-text">自动下载录制文件</span>
+      </label>
+      <small class="setting-hint">
+        关闭后录制完成时不会自动保存文件，而是提供手动下载按钮
+      </small>
+    </div>
   </div>
+
+  <!-- 手动下载区域 -->
+  {#if currentRecordedBlob && !currentAutoDownload}
+    <div class="download-section">
+      <h3>录制完成</h3>
+      <div class="download-info">
+        <div class="file-info">
+          <span class="file-name">{currentRecordedFileName || '未命名录制.webm'}</span>
+          <span class="file-size">
+            {currentRecordedBlob ? `${(currentRecordedBlob.size / 1024 / 1024).toFixed(1)} MB` : ''}
+          </span>
+        </div>
+        <div class="download-actions">
+          <button
+            class="btn btn-primary"
+            class:loading={isLoading}
+            onclick={handleManualDownload}
+            disabled={isLoading}
+          >
+            <span class="icon icon-download"></span>
+            {isLoading ? '下载中...' : '下载文件'}
+          </button>
+          <button
+            class="btn btn-secondary"
+            onclick={handleCancelDownload}
+            disabled={isLoading}
+          >
+            <span class="icon icon-cancel"></span>
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <!-- 快捷键提示 -->
   <div class="shortcuts-hint">
@@ -824,6 +916,156 @@
     color: #374151;
     font-weight: 600;
     font-size: 0.95rem;
+  }
+
+  /* 复选框样式 */
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    margin-bottom: 0 !important;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #6366f1;
+    cursor: pointer;
+  }
+
+  .checkbox-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  .setting-hint {
+    display: block;
+    margin-top: 0.5rem;
+    color: #6b7280;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  /* 下载区域样式 */
+  .download-section {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 24px;
+    padding: 2.5rem;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    transition: all 0.3s ease;
+  }
+
+  .download-section:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(34, 197, 94, 0.3);
+  }
+
+  .download-section h3 {
+    margin-top: 0;
+    margin-bottom: 2rem;
+    color: #059669;
+    font-size: 1.5rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .download-section h3::before {
+    content: '✅';
+    font-size: 1.25rem;
+  }
+
+  .download-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .file-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    background: rgba(34, 197, 94, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(34, 197, 94, 0.2);
+  }
+
+  .file-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #065f46;
+  }
+
+  .file-size {
+    font-size: 0.9rem;
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  .download-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* 下载和取消图标 */
+  .icon-download {
+    position: relative;
+  }
+
+  .icon-download::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    right: 4px;
+    height: 8px;
+    background: currentColor;
+    border-radius: 1px;
+  }
+
+  .icon-download::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 6px solid currentColor;
+  }
+
+  .icon-cancel {
+    position: relative;
+  }
+
+  .icon-cancel::before,
+  .icon-cancel::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 1px;
+  }
+
+  .icon-cancel::before {
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+
+  .icon-cancel::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
   }
 
   .radio-group {

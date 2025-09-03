@@ -12,6 +12,7 @@ import {
   setError,
   updateDuration,
   updateSettings,
+  clearRecordedBlob,
   type RecordingMode,
   type RecordingRegion,
   type AudioSource
@@ -145,14 +146,44 @@ export class ScreenRecorder {
       // 设置停止后的处理
       this.mediaRecorder.onstop = async () => {
         try {
-          const outputPath = await this.saveRecording();
-          stopRecordingStore(outputPath);
-          this.cleanup();
-          resolve(outputPath);
+          const settings = get(recordingSettings);
+          
+          // 创建录制数据 blob
+          const blob = new Blob(this.recordedChunks, { 
+            type: this.mediaRecorder?.mimeType || 'video/webm' 
+          });
+          
+          // 生成文件名
+          const timestamp = new Date().toISOString()
+            .replace(/[:.]/g, '-')
+            .replace('T', '_')
+            .slice(0, -5);
+          
+          let extension = 'webm';
+          if (this.mediaRecorder?.mimeType.includes('mp4')) {
+            extension = 'mp4';
+          } else if (settings.fileFormat === 'mp4') {
+            extension = 'webm';
+          }
+          
+          const fileName = `ScreenRecording_${timestamp}.${extension}`;
+          
+          if (settings.autoDownload) {
+            // 自动保存模式
+            const outputPath = await this.saveRecordingFromBlob(blob, fileName);
+            stopRecordingStore(outputPath);
+            this.cleanup();
+            resolve(outputPath);
+          } else {
+            // 手动下载模式：只保存 blob 到 store，不写入文件
+            stopRecordingStore(undefined, blob, fileName);
+            this.cleanup();
+            resolve(null);
+          }
         } catch (error) {
-          console.error('保存录制失败:', error);
+          console.error('处理录制数据失败:', error);
           const errorMessage = error instanceof Error ? error.message : String(error);
-          setError(`保存录制失败: ${errorMessage}`);
+          setError(`处理录制失败: ${errorMessage}`);
           resolve(null);
         }
       };
@@ -355,7 +386,85 @@ export class ScreenRecorder {
   }
 
   /**
-   * 保存录制
+   * 从 Blob 保存录制文件
+   */
+  private async saveRecordingFromBlob(blob: Blob, fileName: string): Promise<string> {
+    const settings = get(recordingSettings);
+    
+    // 确定保存路径
+    let saveDir = settings.saveDirectory;
+    if (!saveDir) {
+      saveDir = await videoDir();
+    }
+    const filePath = await join(saveDir, fileName);
+
+    // 转换为 ArrayBuffer
+    const arrayBuffer = await blob.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    // 写入文件（确保目录存在）
+    let savedPath: string;
+    try {
+      // create dir if missing (recursive)
+      try {
+        const dirExists = await exists(saveDir);
+        if (!dirExists) {
+          await mkdir(saveDir, { recursive: true });
+        }
+      } catch (_) {
+        // ignore mkdir errors here; write will still attempt and we may fall back
+      }
+      await writeFile(filePath, uint8Array);
+      console.log('录制已保存到:', filePath);
+      savedPath = filePath;
+    } catch (e: any) {
+      // 若权限/范围限制，回退到默认视频目录进行一次性保存，但不修改用户设置
+      const errMsg = e?.message || String(e);
+      if (/forbidden|scope|permission|denied|not\s*permitted/i.test(errMsg)) {
+        const fallbackDir = await videoDir();
+        const fallbackPath = await join(fallbackDir, fileName);
+        try {
+          const existsFallback = await exists(fallbackDir);
+          if (!existsFallback) {
+            await mkdir(fallbackDir, { recursive: true });
+          }
+        } catch (_) {}
+        await writeFile(fallbackPath, uint8Array);
+        console.warn('原保存目录不可用，本次已回退到默认视频目录:', fallbackDir);
+        savedPath = fallbackPath;
+      } else {
+        throw e;
+      }
+    }
+
+    // 如果需要转换为MP4格式
+    if (settings.fileFormat === 'mp4' && fileName.endsWith('.webm')) {
+      try {
+        console.log('开始转换为MP4格式...');
+        const { invoke } = await import('@tauri-apps/api/core');
+        const mp4Path = savedPath.replace(/\.webm$/, '.mp4');
+        
+        // 调用Tauri后端进行格式转换
+        await invoke('convert_to_mp4', { 
+          inputPath: savedPath, 
+          outputPath: mp4Path 
+        });
+        
+        console.log('MP4转换完成:', mp4Path);
+        return mp4Path;
+      } catch (error) {
+        console.error('MP4转换失败，保留WebM格式:', error);
+        // 转换失败时返回原始WebM文件
+        return savedPath;
+      }
+    }
+    
+    return savedPath;
+  }
+
+  /**
+   * 保存录制（传统方式，已废弃，保留用于兼容）
+   * @deprecated 使用 saveRecordingFromBlob 替代
    */
   private async saveRecording(): Promise<string> {
     const settings = get(recordingSettings);
@@ -451,6 +560,40 @@ export class ScreenRecorder {
     }
     
     return savedPath;
+  }
+
+  /**
+   * 获取录制的 Blob 数据
+   */
+  public getRecordedBlob(): Blob | null {
+    const state = get(recordingState);
+    return state.recordedBlob;
+  }
+
+  /**
+   * 手动下载录制文件
+   */
+  public async downloadRecording(): Promise<string | null> {
+    const state = get(recordingState);
+    if (!state.recordedBlob || !state.recordedFileName) {
+      console.warn('没有可下载的录制数据');
+      return null;
+    }
+
+    try {
+      const outputPath = await this.saveRecordingFromBlob(state.recordedBlob, state.recordedFileName);
+      
+      // 清除存储的录制数据
+      clearRecordedBlob();
+      
+      console.log('手动下载完成:', outputPath);
+      return outputPath;
+    } catch (error) {
+      console.error('手动下载失败:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setError(`下载失败: ${errorMessage}`);
+      return null;
+    }
   }
 
   /**
