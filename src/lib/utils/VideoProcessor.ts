@@ -36,10 +36,27 @@ export class VideoProcessor {
       canvas.width = options.cropWidth;
       canvas.height = options.cropHeight;
 
+      // 检测原始视频格式并保持一致
+      const originalType = videoBlob.type || 'video/webm';
+      const isMP4 = originalType.includes('mp4');
+      
+      // 选择合适的MIME类型
+      let mimeType = 'video/webm;codecs=vp9';
+      if (isMP4) {
+        mimeType = 'video/mp4';
+      }
+
       // 创建MediaRecorder用于录制裁剪后的视频
       const stream = canvas.captureStream(30); // 30 FPS
+      
+      // 检查浏览器是否支持所需的MIME类型
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        console.warn(`浏览器不支持 ${mimeType}，使用 WebM 格式`);
+        mimeType = 'video/webm;codecs=vp9';
+      }
+      
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9'
+        mimeType: mimeType
       });
 
       const chunks: Blob[] = [];
@@ -51,7 +68,8 @@ export class VideoProcessor {
       };
 
       mediaRecorder.onstop = () => {
-        const croppedBlob = new Blob(chunks, { type: 'video/webm' });
+        const outputType = isMP4 && mimeType.includes('mp4') ? 'video/mp4' : 'video/webm';
+        const croppedBlob = new Blob(chunks, { type: outputType });
         resolve(croppedBlob);
       };
 
@@ -125,10 +143,27 @@ export class VideoProcessor {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
 
+        // 检测原始视频格式并保持一致
+        const originalType = videoBlob.type || 'video/webm';
+        const isMP4 = originalType.includes('mp4');
+        
+        // 选择合适的MIME类型
+        let mimeType = 'video/webm;codecs=vp9';
+        if (isMP4) {
+          mimeType = 'video/mp4';
+        }
+
         // 创建MediaRecorder
         const stream = canvas.captureStream(30);
+        
+        // 检查浏览器是否支持所需的MIME类型
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          console.warn(`浏览器不支持 ${mimeType}，使用 WebM 格式`);
+          mimeType = 'video/webm;codecs=vp9';
+        }
+        
         const mediaRecorder = new MediaRecorder(stream, {
-          mimeType: 'video/webm;codecs=vp9'
+          mimeType: mimeType
         });
 
         const chunks: Blob[] = [];
@@ -140,7 +175,8 @@ export class VideoProcessor {
         };
 
         mediaRecorder.onstop = () => {
-          const trimmedBlob = new Blob(chunks, { type: 'video/webm' });
+          const outputType = isMP4 && mimeType.includes('mp4') ? 'video/mp4' : 'video/webm';
+          const trimmedBlob = new Blob(chunks, { type: outputType });
           resolve(trimmedBlob);
         };
 

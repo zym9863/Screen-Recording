@@ -311,13 +311,16 @@
       saveDir = await videoDir();
     }
 
-    // 生成文件名
+    // 根据原始文件名和Blob类型生成合适的文件名
     const timestamp = new Date().toISOString()
       .replace(/[:.]/g, '-')
       .replace('T', '_')
       .slice(0, -5);
 
-    const fileName = `ScreenRecording_Edited_${timestamp}.webm`;
+    // 检测输出格式
+    const isMP4 = processedBlob.type && processedBlob.type.includes('mp4');
+    const extension = isMP4 ? 'mp4' : 'webm';
+    const fileName = `ScreenRecording_Edited_${timestamp}.${extension}`;
 
     try {
       // 确保目录存在
