@@ -2,7 +2,7 @@
 
 [中文版本 (Chinese Version)](README.md)
 
-A modern desktop screen recording application built with Tauri + SvelteKit + TypeScript. Supports multiple recording modes, audio recording, high-quality video encoding, and more.
+A modern desktop screen recording application built with Tauri + SvelteKit + TypeScript. Supports multiple recording modes, audio recording, high-quality video encoding, built-in video editing features, and more.
 
 ## ✨ Features
 
@@ -21,6 +21,12 @@ A modern desktop screen recording application built with Tauri + SvelteKit + Typ
   - Support for H.264 video encoding (MP4 format)
   - Configurable frame rate and bitrate
   - WebM and MP4 format output
+
+- **Built-in Video Editor**
+  - Time-based trimming (start/end time selection)
+  - Spatial cropping (custom rectangular areas)
+  - Real-time preview of editing effects
+  - Intuitive visual controls
 
 - **Real-time Control**
   - Start/Pause/Resume/Stop recording
@@ -81,13 +87,26 @@ A modern desktop screen recording application built with Tauri + SvelteKit + Typ
 4. Select output format:
    - **WebM**: Native support, no additional software required
    - **MP4**: Requires FFmpeg, better quality and compatibility
-5. Click "Start" to begin recording
+5. Configure auto-download setting:
+   - **Auto-download ON**: Recording automatically saves when stopped
+   - **Auto-download OFF**: Access built-in video editor after recording
+6. Click "Start" to begin recording
 
 ### Recording Controls
 
 - **Pause/Resume**: Pause or resume current recording
-- **Stop**: End recording and auto-save file
+- **Stop**: End recording and process file
 - **Duration Display**: Real-time recording duration display
+
+### Video Editing (When Auto-download is OFF)
+
+When auto-download is disabled, you'll access the built-in video editor after stopping a recording:
+
+1. **Video Preview**: Review your recording with playback controls
+2. **Time Trimming**: Use sliders to set start and end times
+3. **Spatial Cropping**: Drag to define custom recording areas
+4. **Real-time Preview**: See effects before saving
+5. **Save Options**: Process and save edited video
 
 ### Output Files
 
@@ -132,8 +151,10 @@ src/
 ├── lib/
 │   ├── recorder/
 │   │   └── ScreenRecorder.ts    # Core recording functionality
-│   └── stores/
-│       └── recording.ts         # Recording state management
+│   ├── stores/
+│   │   └── recording.ts         # Recording state management
+│   └── components/
+│       └── VideoEditor.svelte   # Built-in video editor
 ├── routes/
 │   └── +page.svelte            # Main interface
 └── app.html                     # HTML template
