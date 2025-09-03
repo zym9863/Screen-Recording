@@ -32,8 +32,6 @@
   let currentError = $state($recordingState.error);
   
   let isLoading = $state(false);
-  let showRegionSelector = $state(false);
-  let selectedRegion = $state(null);
 
   // 订阅 store 变化
   $effect(() => {
@@ -136,16 +134,9 @@
   async function startRecording() {
     try {
       isLoading = true;
-      
-      // 如果是区域录制，需要先选择区域
-      if (currentMode === 'region' && !selectedRegion) {
-        // TODO: 实现区域选择器
-        await message('区域录制功能开发中', '提示');
-        return;
-      }
 
       // 开始录制
-      await screenRecorder.startRecording(currentMode, selectedRegion || undefined);
+      await screenRecorder.startRecording(currentMode);
       
       // 通知后端更新状态
       await invoke('update_recording_status', { status: 'recording' });
@@ -322,16 +313,7 @@
             />
             <span>窗口</span>
           </label>
-          <label class="radio-item">
-            <input
-              type="radio"
-              value="region"
-              bind:group={currentMode}
-              disabled={currentStatus !== 'idle'}
-              onchange={() => updateSettings({ mode: currentMode })}
-            />
-            <span>区域</span>
-          </label>
+          
         </div>
       </fieldset>
     </div>

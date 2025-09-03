@@ -9,7 +9,7 @@ export type RecordingStatus = 'idle' | 'recording' | 'paused';
 /**
  * 录制模式类型
  */
-export type RecordingMode = 'fullscreen' | 'window' | 'region';
+export type RecordingMode = 'fullscreen' | 'window';
 
 /**
  * 音频输入源类型

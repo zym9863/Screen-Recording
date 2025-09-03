@@ -59,8 +59,7 @@ export class ScreenRecorder {
    * 开始录制
    */
   public async startRecording(
-    mode: RecordingMode = 'fullscreen',
-    region?: RecordingRegion
+    mode: RecordingMode = 'fullscreen'
   ): Promise<void> {
     try {
       const settings = get(recordingSettings);
@@ -73,13 +72,8 @@ export class ScreenRecorder {
         this.audioStream = await this.captureAudio(settings.audioSource);
       }
 
-      // 处理区域录制
-      if (mode === 'region' && region) {
-        await this.setupRegionCapture(region, settings.frameRate);
-      } else {
-        // 合并音视频流
-        this.combinedStream = this.combineStreams();
-      }
+      // 合并音视频流
+      this.combinedStream = this.combineStreams();
 
       // 设置 MediaRecorder
       const mimeType = this.getPreferredMimeType(settings.videoCodec, settings.fileFormat);
@@ -101,12 +95,12 @@ export class ScreenRecorder {
       this.mediaRecorder.start(1000); // 每秒收集一次数据
       
       // 更新状态
-      startRecordingStore(mode, region);
+      startRecordingStore(mode);
       
       // 开始更新时长
       this.startDurationTimer();
       
-      console.log('录制已开始', { mode, region, mimeType });
+      console.log('录制已开始', { mode, mimeType });
     } catch (error) {
   // 静默处理开始录制失败，不更新 UI 错误提示
   console.warn('开始录制失败(已静默):', error);
@@ -185,14 +179,12 @@ export class ScreenRecorder {
       audio: false // 系统音频单独处理
     };
 
-    // 对于窗口和全屏模式，添加系统音频请求
-    if (mode !== 'region') {
-      constraints.audio = {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
-      } as MediaTrackConstraints;
-    }
+    // 添加系统音频请求
+    constraints.audio = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false
+    } as MediaTrackConstraints;
 
     const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
     
@@ -254,52 +246,6 @@ export class ScreenRecorder {
     }
 
     return null;
-  }
-
-  /**
-   * 设置区域捕获
-   */
-  private async setupRegionCapture(region: RecordingRegion, frameRate: number): Promise<void> {
-    // 创建 canvas 和 video 元素
-    this.canvas = document.createElement('canvas');
-    this.canvas.width = region.width;
-    this.canvas.height = region.height;
-    this.canvasCtx = this.canvas.getContext('2d');
-
-    this.videoElement = document.createElement('video');
-    this.videoElement.srcObject = this.displayStream;
-    this.videoElement.play();
-
-    // 等待视频加载
-    await new Promise<void>((resolve) => {
-      this.videoElement!.onloadedmetadata = () => resolve();
-    });
-
-    // 开始绘制循环
-    const drawFrame = () => {
-      if (this.canvasCtx && this.videoElement) {
-        this.canvasCtx.drawImage(
-          this.videoElement,
-          region.x, region.y, region.width, region.height,
-          0, 0, region.width, region.height
-        );
-      }
-      this.animationFrameId = requestAnimationFrame(drawFrame);
-    };
-    drawFrame();
-
-    // 从 canvas 创建流
-    const canvasStream = this.canvas.captureStream(frameRate);
-    
-    // 合并音频
-    if (this.audioStream) {
-      this.combinedStream = new MediaStream([
-        ...canvasStream.getVideoTracks(),
-        ...this.audioStream.getAudioTracks()
-      ]);
-    } else {
-      this.combinedStream = canvasStream;
-    }
   }
 
   /**
