@@ -382,8 +382,18 @@
    * 打开保存文件夹
    */
   async function openSaveFolder() {
-    const dir = currentSaveDir || await videoDir();
-    await invoke('open_folder', { path: dir });
+    try {
+      const dir = currentSaveDir || await videoDir();
+      await invoke('open_folder', { path: dir });
+    } catch (e: any) {
+      console.warn('打开保存目录失败:', e);
+      const msg = typeof e === 'string' ? e : (e?.message || '未知错误');
+      // 尽量给出可读提示
+      await message(`无法打开保存目录：${msg}` , {
+        title: '打开目录失败',
+        kind: 'error'
+      });
+    }
   }
 
   // 计算状态文本

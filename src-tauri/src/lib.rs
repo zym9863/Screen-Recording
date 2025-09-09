@@ -99,6 +99,82 @@ fn exit_app(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// 打开保存目录（系统文件管理器）
+///
+/// 输入：
+/// - path: 需要打开的目录路径（字符串）。
+///
+/// 行为：
+/// - 若目录不存在，则尝试递归创建；
+/// - 根据当前平台调用系统文件管理器打开该目录：
+///   - Windows: `explorer <path>`
+///   - macOS: `open <path>`
+///   - Linux: `xdg-open <path>`
+///
+/// 返回：
+/// - Ok(()) 表示已尝试打开（外部程序返回非零也只记录日志）。
+/// - Err(String) 表示路径非法、创建失败或启动外部程序失败。
+#[tauri::command]
+fn open_folder(path: String) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("保存目录路径为空".to_string());
+    }
+
+    let dir_path = Path::new(&path);
+
+    // 确保目录存在
+    if !dir_path.exists() {
+        if let Err(e) = std::fs::create_dir_all(dir_path) {
+            error!("目录不存在且创建失败: {}", e);
+            return Err(format!("目录不存在且创建失败: {}", e));
+        }
+    }
+
+    info!("打开保存目录: {}", path);
+
+    // 根据平台调用系统文件管理器
+    #[cfg(target_os = "windows")]
+    {
+        let status = Command::new("explorer")
+            .arg(&path)
+            .status()
+            .map_err(|e| format!("启动资源管理器失败: {}", e))?;
+        if !status.success() {
+            warn!("资源管理器返回非零退出码: {:?}", status.code());
+        }
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("open")
+            .arg(&path)
+            .status()
+            .map_err(|e| format!("启动 Finder 失败: {}", e))?;
+        if !status.success() {
+            warn!("open 返回非零退出码: {:?}", status.code());
+        }
+        return Ok(());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let status = Command::new("xdg-open")
+            .arg(&path)
+            .status()
+            .map_err(|e| format!("启动文件管理器失败: {}", e))?;
+        if !status.success() {
+            warn!("xdg-open 返回非零退出码: {:?}", status.code());
+        }
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    {
+        Err("当前平台暂不支持打开目录".to_string())
+    }
+}
+
 /// 将WebM文件转换为MP4格式
 #[tauri::command]
 async fn convert_to_mp4(input_path: String, output_path: String) -> Result<String, String> {
@@ -325,7 +401,8 @@ pub fn run() {
             resume_recording,
             update_recording_status,
             exit_app,
-            convert_to_mp4
+            convert_to_mp4,
+            open_folder
         ])
         .setup(|app| {
             // 设置托盘
