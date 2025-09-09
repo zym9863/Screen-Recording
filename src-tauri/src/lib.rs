@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Manager, State, Emitter};
-use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::image::Image;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -249,10 +249,22 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .on_tray_icon_event(|tray, event| {
-            // 左键点击：统一行为为“恢复并激活主窗口”（不再切换隐藏），
-            // 避免窗口处于最小化时被误判为可见而进一步 hide()
-            if let TrayIconEvent::Click { .. } = event {
-                let _ = restore_main_window(&tray.app_handle());
+            match event {
+                TrayIconEvent::Click { button, button_state, .. } => {
+                    match button {
+                        MouseButton::Left if button_state == MouseButtonState::Up => {
+                            // 左键点击：恢复并激活主窗口
+                            info!("托盘左键点击 - 恢复主窗口");
+                            let _ = restore_main_window(&tray.app_handle());
+                        }
+                        MouseButton::Right if button_state == MouseButtonState::Up => {
+                            // 右键点击：在 Tauri v2 中，菜单会自动显示
+                            info!("托盘右键点击 - 显示上下文菜单");
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
             }
         });
 
