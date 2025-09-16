@@ -18,6 +18,36 @@ import {
   type AudioSource
 } from '$lib/stores/recording';
 
+/** 统一错误码 */
+export enum RecordingErrorCode {
+  INIT_MEDIA = 'INIT_MEDIA',
+  INIT_AUDIO = 'INIT_AUDIO',
+  UNSUPPORTED_MIME = 'UNSUPPORTED_MIME',
+  SAVE_FILE = 'SAVE_FILE',
+  PROCESS_DATA = 'PROCESS_DATA',
+  PERMISSION_DENIED = 'PERMISSION_DENIED',
+  STATE_INVALID = 'STATE_INVALID'
+}
+
+/** 录制错误对象 */
+export class RecordingError extends Error {
+  code: RecordingErrorCode;
+  causeRaw?: unknown;
+  constructor(code: RecordingErrorCode, message: string, cause?: unknown) {
+    super(message);
+    this.code = code;
+    this.name = 'RecordingError';
+    this.causeRaw = cause;
+  }
+}
+
+/** 简单日志工具 */
+const log = {
+  info: (...args: any[]) => console.log('[Recorder]', ...args),
+  warn: (...args: any[]) => console.warn('[Recorder]', ...args),
+  error: (...args: any[]) => console.error('[Recorder]', ...args)
+};
+
 /**
  * 屏幕录制核心类
  * 封装 Web Media API 实现录屏功能
@@ -33,6 +63,8 @@ export class ScreenRecorder {
   private videoElement: HTMLVideoElement | null = null;
   private animationFrameId: number | null = null;
   private durationInterval: number | null = null;
+  private memoryInterval: number | null = null; // 内存监控
+  private enableMemoryWatch = false; // 可通过设置或调试开启
 
   constructor() {
     // 初始化
@@ -64,48 +96,60 @@ export class ScreenRecorder {
   ): Promise<void> {
     try {
       const settings = get(recordingSettings);
-      
+      if (get(recordingState).status !== 'idle') {
+        throw new RecordingError(RecordingErrorCode.STATE_INVALID, '当前状态不允许开始录制');
+      }
       // 获取视频流
-      this.displayStream = await this.captureDisplay(mode, settings.frameRate);
-      
+      try {
+        this.displayStream = await this.captureDisplay(mode, settings.frameRate);
+      } catch (e: any) {
+        const msg = e?.name === 'NotAllowedError' ? '用户未授权屏幕共享' : '获取屏幕视频流失败';
+        throw new RecordingError(
+          e?.name === 'NotAllowedError' ? RecordingErrorCode.PERMISSION_DENIED : RecordingErrorCode.INIT_MEDIA,
+          msg,
+          e
+        );
+      }
       // 获取音频流
       if (settings.audioSource !== 'none') {
-        this.audioStream = await this.captureAudio(settings.audioSource);
+        try {
+          this.audioStream = await this.captureAudio(settings.audioSource);
+        } catch (e) {
+          log.warn('音频流获取失败，将继续仅录制视频', e);
+        }
       }
-
-      // 合并音视频流
+      // 合并流
       this.combinedStream = this.combineStreams();
-
-      // 设置 MediaRecorder
+      // MediaRecorder 初始化
       const mimeType = this.getPreferredMimeType(settings.videoCodec, settings.fileFormat);
       const options: MediaRecorderOptions = {
         mimeType,
         videoBitsPerSecond: settings.videoBitrate * 1000,
         audioBitsPerSecond: settings.audioBitrate * 1000
       };
-
-      this.mediaRecorder = new MediaRecorder(
-        this.combinedStream || this.displayStream,
-        options
-      );
-
-      // 设置事件处理
+      try {
+        this.mediaRecorder = new MediaRecorder(
+          this.combinedStream || this.displayStream!,
+          options
+        );
+      } catch (e) {
+        throw new RecordingError(RecordingErrorCode.UNSUPPORTED_MIME, '无法初始化录制器，可能是不支持的编码格式', e);
+      }
       this.setupRecorderEvents();
-
-      // 开始录制
-      this.mediaRecorder.start(1000); // 每秒收集一次数据
-      
-      // 更新状态
+      this.mediaRecorder.start(1000);
       startRecordingStore(mode);
-      
-      // 开始更新时长
       this.startDurationTimer();
-      
-      console.log('录制已开始', { mode, mimeType });
+      this.startMemoryWatch(); // 开始内存监控
+      log.info('录制已开始', { mode, mimeType });
     } catch (error) {
-  // 静默处理开始录制失败，不更新 UI 错误提示
-  console.warn('开始录制失败(已静默):', error);
-  throw error;
+      if (error instanceof RecordingError) {
+        setError(`${error.message} (代码: ${error.code})`);
+      } else {
+        setError('开始录制失败，请重试');
+      }
+      log.error('开始录制失败:', error);
+      this.cleanup();
+      throw error;
     }
   }
 
@@ -181,7 +225,7 @@ export class ScreenRecorder {
             resolve(null);
           }
         } catch (error) {
-          console.error('处理录制数据失败:', error);
+          log.error('处理录制数据失败:', error);
           const errorMessage = error instanceof Error ? error.message : String(error);
           setError(`处理录制失败: ${errorMessage}`);
           resolve(null);
@@ -194,7 +238,7 @@ export class ScreenRecorder {
       }
       
       this.stopDurationTimer();
-      console.log('录制已停止');
+      log.info('录制已停止');
     });
   }
 
@@ -380,7 +424,7 @@ export class ScreenRecorder {
     };
 
     this.mediaRecorder.onerror = (event: any) => {
-      console.error('录制器错误:', event.error);
+      log.error('录制器错误:', event.error);
       setError(`录制错误: ${event.error?.message || '未知错误'}`);
     };
   }
@@ -615,6 +659,26 @@ export class ScreenRecorder {
     }
   }
 
+  private startMemoryWatch() {
+    if (!this.enableMemoryWatch || this.memoryInterval) return;
+    // 仅在支持 performance.memory 的环境
+    const anyPerf: any = performance as any;
+    if (!anyPerf || !anyPerf.memory) return;
+    this.memoryInterval = window.setInterval(() => {
+      const used = Math.round(anyPerf.memory.usedJSHeapSize / 1024 / 1024);
+      const total = Math.round(anyPerf.memory.totalJSHeapSize / 1024 / 1024);
+      if (used / total > 0.85) {
+        log.warn(`内存占用较高: ${used}MB / ${total}MB`);
+      }
+    }, 5000);
+  }
+  private stopMemoryWatch() {
+    if (this.memoryInterval) {
+      clearInterval(this.memoryInterval);
+      this.memoryInterval = null;
+    }
+  }
+
   /**
    * 清理资源
    */
@@ -659,6 +723,7 @@ export class ScreenRecorder {
 
     // 停止计时器
     this.stopDurationTimer();
+    this.stopMemoryWatch();
   }
 }
 

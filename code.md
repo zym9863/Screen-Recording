@@ -91,9 +91,16 @@
    }
    ```
 
+   ✅ 已实现（2025-09-16）：
+   - 引入 RecordingError 与 RecordingErrorCode 统一错误分类
+   - startRecording 增加状态校验与权限拒绝提示
+   - onerror 事件集中输出并写入 store.setError
+   - 失败场景自动 cleanup 防止资源泄漏
+
 2. **性能监控**
    - 添加录制时长限制
    - 内存使用警告机制
+   ✅ 初步实现：添加可选内存监控（performance.memory）>85% 警告，后续可扩展阈值配置与自动停止策略。
 
 ### 中期改进 (1个月)
 
