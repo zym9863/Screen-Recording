@@ -1,9 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { VideoProcessor, type CropOptions } from '$lib/utils/VideoProcessor';
+  import { t, translate } from '$lib/i18n';
   
   export let videoBlob: Blob;
-  export let fileName: string;
   export let isLoading = false;
   
   const dispatch = createEventDispatcher();
@@ -396,7 +396,7 @@
   async function saveVideo() {
     try {
       isLoading = true;
-      processingStatus = '正在分析视频...';
+      processingStatus = translate('editor.processing.analyzing');
       processingProgress = 10;
 
       // 检查是否需要裁剪
@@ -407,7 +407,7 @@
       let processedBlob = videoBlob;
 
       if (needsTimeCrop || needsSpaceCrop) {
-        processingStatus = '正在处理视频...';
+        processingStatus = translate('editor.processing.processing');
         processingProgress = 30;
 
         // 需要裁剪处理
@@ -424,23 +424,23 @@
 
         if (needsTimeCrop && needsSpaceCrop) {
           // 时间和空间都需要裁剪
-          processingStatus = '正在裁剪视频...';
+          processingStatus = translate('editor.processing.cropping');
           processingProgress = 50;
           processedBlob = await VideoProcessor.cropVideo(videoBlob, cropOptions);
         } else if (needsTimeCrop) {
           // 仅时间裁剪
-          processingStatus = '正在裁剪时间...';
+          processingStatus = translate('editor.processing.trimming');
           processingProgress = 50;
           processedBlob = await VideoProcessor.trimVideo(videoBlob, startTime, endTime);
         } else {
           // 仅空间裁剪
-          processingStatus = '正在裁剪区域...';
+          processingStatus = translate('editor.processing.cropping');
           processingProgress = 50;
           processedBlob = await VideoProcessor.cropVideo(videoBlob, cropOptions);
         }
       }
 
-      processingStatus = '正在保存文件...';
+      processingStatus = translate('editor.processing.saving');
       processingProgress = 80;
 
       dispatch('save', {
@@ -460,8 +460,8 @@
 
       processingProgress = 100;
     } catch (error) {
-      console.error('视频处理失败:', error);
-      processingStatus = '处理失败';
+      console.error(translate('editor.processing.failed'), error);
+      processingStatus = translate('editor.processing.failed');
       dispatch('error', {
         message: error instanceof Error ? error.message : '视频处理失败'
       });
@@ -529,7 +529,7 @@
 <svelte:window on:keydown={handleKeydown} />
 
 <div class="video-editor">
-  <h3>视频编辑</h3>
+  <h3>{$t('editor.title')}</h3>
   
   <!-- 隐藏的视频元素用于处理 -->
   <video
@@ -552,14 +552,14 @@
         class:active={previewMode === 'original'}
         on:click={() => previewMode = 'original'}
       >
-        原始视频
+        {$t('editor.preview.original')}
       </button>
       <button
         class="btn btn-secondary"
         class:active={previewMode === 'cropped'}
         on:click={() => previewMode = 'cropped'}
       >
-        裁剪预览
+        {$t('editor.preview.cropped')}
       </button>
     </div>
 
@@ -587,10 +587,10 @@
   
   <!-- 时间裁剪控制 -->
   <div class="time-crop-section">
-    <h4>时间裁剪</h4>
+    <h4>{$t('editor.timeCrop.title')}</h4>
     <div class="time-controls">
       <div class="time-input-group">
-        <label for="start-time-range">开始时间:</label>
+        <label for="start-time-range">{$t('editor.timeCrop.start')}:</label>
         <input
           id="start-time-range"
           type="range"
@@ -604,7 +604,7 @@
       </div>
 
       <div class="time-input-group">
-        <label for="end-time-range">结束时间:</label>
+        <label for="end-time-range">{$t('editor.timeCrop.end')}:</label>
         <input
           id="end-time-range"
           type="range"
@@ -618,18 +618,18 @@
       </div>
       
       <div class="duration-info">
-        裁剪后时长: {formatTime(endTime - startTime)}
+        {$t('editor.timeCrop.duration')}: {formatTime(endTime - startTime)}
       </div>
     </div>
   </div>
 
   <!-- 空间裁剪控制 -->
   <div class="space-crop-section">
-    <h4>空间裁剪</h4>
+    <h4>{$t('editor.spaceCrop.title')}</h4>
     <div class="crop-controls">
       <div class="crop-info">
         <div class="crop-input-group">
-          <label for="crop-x">X坐标:</label>
+          <label for="crop-x">{$t('editor.spaceCrop.x')}:</label>
           <input
             id="crop-x"
             type="number"
@@ -641,7 +641,7 @@
         </div>
 
         <div class="crop-input-group">
-          <label for="crop-y">Y坐标:</label>
+          <label for="crop-y">{$t('editor.spaceCrop.y')}:</label>
           <input
             id="crop-y"
             type="number"
@@ -653,7 +653,7 @@
         </div>
 
         <div class="crop-input-group">
-          <label for="crop-width">宽度:</label>
+          <label for="crop-width">{$t('editor.spaceCrop.width')}:</label>
           <input
             id="crop-width"
             type="number"
@@ -665,7 +665,7 @@
         </div>
 
         <div class="crop-input-group">
-          <label for="crop-height">高度:</label>
+          <label for="crop-height">{$t('editor.spaceCrop.height')}:</label>
           <input
             id="crop-height"
             type="number"
@@ -687,7 +687,7 @@
             cropHeight = videoHeight;
           }}
         >
-          重置为全屏
+          {$t('editor.spaceCrop.resetFull')}
         </button>
 
         <button
@@ -702,12 +702,12 @@
             cropHeight = size;
           }}
         >
-          居中正方形
+          {$t('editor.spaceCrop.centerSquare')}
         </button>
       </div>
 
       <div class="crop-size-info">
-        裁剪尺寸: {cropWidth} × {cropHeight} px
+        {$t('editor.spaceCrop.size')}: {cropWidth} × {cropHeight} px
       </div>
     </div>
   </div>
@@ -732,7 +732,7 @@
       disabled={isLoading}
     >
       <span class="icon icon-download"></span>
-      {isLoading ? processingStatus || '处理中...' : '保存视频'}
+      {isLoading ? processingStatus || translate('common.loading') : $t('editor.actions.save')}
     </button>
     <button
       class="btn btn-secondary"
@@ -740,29 +740,29 @@
       disabled={isLoading}
     >
       <span class="icon icon-cancel"></span>
-      取消
+      {$t('editor.actions.cancel')}
     </button>
   </div>
 
   <!-- 操作提示 -->
   <div class="help-section">
-    <h4>操作提示</h4>
+    <h4>{$t('editor.help.title')}</h4>
     <div class="help-items">
       <div class="help-item">
-        <kbd>空格</kbd> 播放/暂停
+        <kbd>空格</kbd> {$t('editor.help.playPause')}
       </div>
       <div class="help-item">
-        <kbd>←</kbd> <kbd>→</kbd> 快进/快退5秒
+        <kbd>←</kbd> <kbd>→</kbd> {$t('editor.help.seek')}
       </div>
       <div class="help-item">
-        <kbd>Ctrl</kbd>+<kbd>S</kbd> 保存视频
+        <kbd>Ctrl</kbd>+<kbd>S</kbd> {$t('editor.help.save')}
       </div>
       <div class="help-item">
-        <kbd>Esc</kbd> 取消编辑
+        <kbd>Esc</kbd> {$t('editor.help.cancel')}
       </div>
     </div>
     <div class="help-note">
-      💡 在原始视频模式下，可以拖拽裁剪框调整裁剪区域
+      {$t('editor.help.note')}
     </div>
   </div>
 </div>

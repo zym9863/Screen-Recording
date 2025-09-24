@@ -8,6 +8,8 @@
   import { screenRecorder } from '$lib/recorder/ScreenRecorder';
   import { exists, mkdir, writeFile } from '@tauri-apps/plugin-fs';
   import VideoEditor from '$lib/components/VideoEditor.svelte';
+  import LanguageSwitcher from '$lib/components/LanguageSwitcher.svelte';
+  import { t, translate } from '$lib/i18n';
   import {
     recordingState,
     recordingSettings,
@@ -83,11 +85,11 @@
             try { await mkdir(saved, { recursive: true }); } catch (_) {}
           }
         } catch (e) {
-          console.warn('无法验证/创建保存目录，录制时将尝试保存并必要时回退至视频文件夹:', e);
+          console.warn(translate('messages.folderCreationWarning'), e);
         }
       }
     } catch (e) {
-      console.warn('初始化保存目录时出现问题:', e);
+      console.warn(translate('messages.initializationError'), e);
     }
 
     // 监听后端事件
@@ -152,7 +154,7 @@
       
     } catch (error) {
   // 静默处理开始录制失败，不弹出错误提示
-  console.warn('开始录制失败(已静默):', error);
+  console.warn(translate('messages.recordingStartFailed'), error);
     } finally {
       isLoading = false;
     }
@@ -179,14 +181,14 @@
           // TODO: 打开文件
         }
         
-        await message(`录制已保存到: ${outputPath}`, {
-          title: '录制完成',
+        await message(`${$t('download.messages.saved')}: ${outputPath}`, {
+          title: $t('messages.recordingComplete'),
           kind: 'info'
         });
       }
     } catch (error) {
   // 静默处理停止录制失败，不弹出错误提示
-  console.warn('停止录制失败(已静默):', error);
+  console.warn(translate('messages.recordingStopFailed'), error);
     } finally {
       isLoading = false;
     }
@@ -222,8 +224,8 @@
           // TODO: 打开文件
         }
         
-        await message(`录制已保存到: ${outputPath}`, {
-          title: '下载完成',
+        await message(`${$t('download.messages.saved')}: ${outputPath}`, {
+          title: $t('messages.downloadComplete'),
           kind: 'info'
         });
       }
@@ -274,7 +276,7 @@
       }
     } catch (error) {
       // 静默处理保存失败，不显示错误提示框
-      console.warn('视频保存失败(已静默):', error);
+      console.warn(translate('messages.videoSaveFailed'), error);
     } finally {
       isLoading = false;
     }
@@ -286,7 +288,7 @@
   async function handleVideoError(event: CustomEvent) {
     const { message: errorMessage } = event.detail;
     // 静默处理编辑错误，不显示错误提示框
-    console.warn('视频处理失败(已静默):', errorMessage);
+    console.warn(translate('messages.videoEditFailed'), errorMessage);
   }
 
   /**
@@ -370,7 +372,7 @@
     const selected = await open({
       directory: true,
       defaultPath: currentSaveDir || await documentDir(),
-      title: '选择保存目录'
+      title: $t('recording.settings.saveDir.title')
     });
 
     if (selected) {
@@ -387,29 +389,32 @@
       await invoke('open_folder', { path: dir });
     } catch (e: any) {
       console.warn('打开保存目录失败:', e);
-      const msg = typeof e === 'string' ? e : (e?.message || '未知错误');
+      const msg = typeof e === 'string' ? e : (e?.message || translate('common.error'));
       // 尽量给出可读提示
-      await message(`无法打开保存目录：${msg}` , {
-        title: '打开目录失败',
+      await message(`${$t('messages.openFolderFailed')}: ${msg}` , {
+        title: $t('messages.openFolderFailed'),
         kind: 'error'
       });
     }
   }
 
   // 计算状态文本
-  let statusText = $derived(currentStatus === 'idle' ? '准备就绪' :
-                           currentStatus === 'recording' ? '录制中' :
-                           currentStatus === 'paused' ? '已暂停' : '');
+  let statusText = $derived(currentStatus === 'idle' ? $t('app.status.ready') :
+                           currentStatus === 'recording' ? $t('app.status.recording') :
+                           currentStatus === 'paused' ? $t('app.status.paused') : '');
 
   let formattedDuration = $derived(formatDuration(currentDuration));
 </script>
 
 <main class="container">
   <div class="header">
-    <h1>🎬 屏幕录制工具</h1>
-    <div class="status-badge" class:recording={currentStatus === 'recording'}>
-      <span class="status-dot"></span>
-      {statusText}
+    <h1>{$t('app.title')}</h1>
+    <div class="header-right">
+      <LanguageSwitcher />
+      <div class="status-badge" class:recording={currentStatus === 'recording'}>
+        <span class="status-dot"></span>
+        {statusText}
+      </div>
     </div>
   </div>
 
@@ -428,7 +433,7 @@
           disabled={isLoading}
         >
           <span class="icon icon-record"></span>
-          {isLoading ? '准备中...' : '开始录制'}
+          {isLoading ? $t('recording.controls.preparing') : $t('recording.controls.start')}
         </button>
       {:else}
         <button 
@@ -438,7 +443,7 @@
           disabled={isLoading}
         >
           <span class="icon icon-stop"></span>
-          {isLoading ? '正在停止...' : '停止录制'}
+          {isLoading ? $t('recording.controls.stopping') : $t('recording.controls.stop')}
         </button>
         
         {#if currentStatus === 'recording'}
@@ -447,7 +452,7 @@
             onclick={togglePause}
           >
             <span class="icon icon-pause"></span>
-            暂停
+            {$t('recording.controls.pause')}
           </button>
         {:else if currentStatus === 'paused'}
           <button 
@@ -455,7 +460,7 @@
             onclick={togglePause}
           >
             <span class="icon icon-play"></span>
-            继续
+            {$t('recording.controls.resume')}
           </button>
         {/if}
       {/if}
@@ -464,11 +469,11 @@
 
   <!-- 设置区 -->
   <div class="settings-section">
-    <h3>录制设置</h3>
+    <h3>{$t('recording.settings.title')}</h3>
     
     <div class="setting-group">
       <fieldset>
-        <legend>录制模式</legend>
+        <legend>{$t('recording.settings.mode.title')}</legend>
         <div class="radio-group">
           <label class="radio-item">
             <input
@@ -478,7 +483,7 @@
               disabled={currentStatus !== 'idle'}
               onchange={() => updateSettings({ mode: currentMode })}
             />
-            <span>全屏</span>
+            <span>{$t('recording.settings.mode.fullscreen')}</span>
           </label>
           <label class="radio-item">
             <input
@@ -488,7 +493,7 @@
               disabled={currentStatus !== 'idle'}
               onchange={() => updateSettings({ mode: currentMode })}
             />
-            <span>窗口</span>
+            <span>{$t('recording.settings.mode.window')}</span>
           </label>
           
         </div>
@@ -496,59 +501,59 @@
     </div>
 
     <div class="setting-group">
-      <label for="audio-source">音频源</label>
+      <label for="audio-source">{$t('recording.settings.audio.title')}</label>
       <select
         id="audio-source"
         bind:value={currentAudioSource}
         disabled={currentStatus !== 'idle'}
         onchange={() => updateSettings({ audioSource: currentAudioSource })}
       >
-        <option value="none">无音频</option>
-        <option value="microphone">麦克风</option>
-        <option value="system">系统声音</option>
-        <option value="both">麦克风 + 系统声音</option>
+        <option value="none">{$t('recording.settings.audio.none')}</option>
+        <option value="microphone">{$t('recording.settings.audio.microphone')}</option>
+        <option value="system">{$t('recording.settings.audio.system')}</option>
+        <option value="both">{$t('recording.settings.audio.both')}</option>
       </select>
     </div>
 
     <div class="setting-group">
-      <label for="video-quality">视频质量</label>
+      <label for="video-quality">{$t('recording.settings.quality.title')}</label>
       <select
         id="video-quality"
         bind:value={currentQuality}
         disabled={currentStatus !== 'idle'}
         onchange={() => updateSettings({ videoQuality: currentQuality })}
       >
-        <option value="low">低质量 (2Mbps, 15fps)</option>
-        <option value="medium">中等质量 (5Mbps, 30fps)</option>
-        <option value="high">高质量 (10Mbps, 60fps)</option>
+        <option value="low">{$t('recording.settings.quality.low')}</option>
+        <option value="medium">{$t('recording.settings.quality.medium')}</option>
+        <option value="high">{$t('recording.settings.quality.high')}</option>
       </select>
     </div>
 
     <div class="setting-group">
-      <label for="file-format">输出格式</label>
+      <label for="file-format">{$t('recording.settings.format.title')}</label>
       <select
         id="file-format"
         bind:value={currentFileFormat}
         disabled={currentStatus !== 'idle'}
         onchange={() => updateSettings({ fileFormat: currentFileFormat })}
       >
-        <option value="webm">WebM (原生支持)</option>
-        <option value="mp4">MP4 (需要FFmpeg转换)</option>
+        <option value="webm">{$t('recording.settings.format.webm')}</option>
+        <option value="mp4">{$t('recording.settings.format.mp4')}</option>
       </select>
       {#if currentFileFormat === 'mp4'}
         <small class="format-hint">
-          ⚠️ MP4格式需要系统安装FFmpeg。如果转换失败，将保留WebM格式。
+          {$t('recording.settings.format.hint')}
         </small>
       {/if}
     </div>
 
     <div class="setting-group">
-      <label for="save-directory">保存位置</label>
+      <label for="save-directory">{$t('recording.settings.saveDir.title')}</label>
       <div class="path-selector">
         <input
           id="save-directory"
           type="text"
-          value={currentSaveDir || '默认视频文件夹'}
+          value={currentSaveDir || $t('recording.settings.saveDir.default')}
           readonly
         />
         <button
@@ -556,7 +561,7 @@
           onclick={selectSaveDirectory}
           disabled={currentStatus !== 'idle'}
         >
-          选择
+          {$t('recording.settings.saveDir.select')}
         </button>
       </div>
     </div>
@@ -569,10 +574,10 @@
           disabled={currentStatus !== 'idle'}
           onchange={() => updateSettings({ autoDownload: currentAutoDownload })}
         />
-        <span class="checkbox-text">自动下载录制文件</span>
+        <span class="checkbox-text">{$t('recording.settings.autoDownload.title')}</span>
       </label>
       <small class="setting-hint">
-        关闭后录制完成时不会自动保存文件，而是提供手动下载按钮
+        {$t('recording.settings.autoDownload.hint')}
       </small>
     </div>
   </div>
@@ -582,7 +587,6 @@
     {#if showVideoEditor}
       <VideoEditor
         videoBlob={currentRecordedBlob}
-        fileName={currentRecordedFileName || '未命名录制.webm'}
         {isLoading}
         on:save={handleVideoSave}
         on:cancel={handleVideoCancel}
@@ -590,7 +594,7 @@
       />
     {:else}
       <div class="download-section">
-        <h3>录制完成</h3>
+        <h3>{$t('download.title')}</h3>
         <div class="download-info">
           <div class="file-info">
             <span class="file-name">{currentRecordedFileName || '未命名录制.webm'}</span>
@@ -605,7 +609,7 @@
               disabled={isLoading}
             >
               <span class="icon icon-edit"></span>
-              编辑视频
+              {$t('download.actions.edit')}
             </button>
             <button
               class="btn btn-secondary"
@@ -614,7 +618,7 @@
               disabled={isLoading}
             >
               <span class="icon icon-download"></span>
-              {isLoading ? '下载中...' : '直接下载'}
+              {isLoading ? $t('download.actions.downloading') : $t('download.actions.download')}
             </button>
             <button
               class="btn btn-secondary"
@@ -622,7 +626,7 @@
               disabled={isLoading}
             >
               <span class="icon icon-cancel"></span>
-              取消
+              {$t('download.actions.cancel')}
             </button>
           </div>
         </div>
@@ -632,10 +636,10 @@
 
   <!-- 快捷键提示 -->
   <div class="shortcuts-hint">
-    <p>快捷键：</p>
+    <p>{$t('shortcuts.title')}</p>
     <div class="shortcut-items">
-      <span class="shortcut"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> 开始/停止</span>
-      <span class="shortcut"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd> 暂停/继续</span>
+      <span class="shortcut"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> {$t('shortcuts.startStop')}</span>
+      <span class="shortcut"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd> {$t('shortcuts.pauseResume')}</span>
     </div>
   </div>
 
@@ -690,6 +694,13 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem 0;
+    gap: 1rem;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
   }
 
   .header h1 {
